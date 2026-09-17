@@ -1,58 +1,3 @@
-<script setup>
-import { ref, onMounted } from 'vue';
-import api from '../../api';
-
-const props = defineProps({
-  id: {
-    type: [String, Number],
-    required: true
-  }
-});
-
-const emit = defineEmits([
-  'back'
-]);
-
-const driver = ref(null);
-
-const fetchDriverDetail = async () => {
-  try {
-    const response = await api.get(`/drivers/${props.id}`);
-    driver.value = response.data;
-  } catch (error) {
-    console.error('기사 상세 정보 조회 실패:', error);
-    alert('기사 정보를 불러오지 못했습니다.');
-  }
-};
-
-// 상태 값을 사용자가 읽기 좋은 한글과 클래스로 매핑
-const getStatusLabel = (status) => {
-  switch (status) {
-    case 'ON_DUTY': return '근무 중';
-    case 'OFF_DUTY': return '휴무 / 대기';
-    case 'RETIRED': return '퇴사';
-    default: return status;
-  }
-};
-
-const getStatusClass = (status) => {
-  switch (status) {
-    case 'ON_DUTY': return 'status-on';
-    case 'OFF_DUTY': return 'status-off';
-    case 'RETIRED': return 'status-danger';
-    default: return '';
-  }
-};
-
-const goToList = () => {
-  emit('back');
-};
-
-onMounted(() => {
-  fetchDriverDetail();
-});
-</script>
-
 <template>
   <div
     v-if="driver"
@@ -70,16 +15,30 @@ onMounted(() => {
     <div class="details-card">
       <div class="info-grid">
         <div class="info-item">
-          <span class="label">ID</span>
-          <span class="value font-mono">
-            {{ driver.id }}
+          <span class="label">이름</span>
+          <span class="value">
+            {{ driver.name }}
           </span>
         </div>
 
         <div class="info-item">
-          <span class="label">이름</span>
+          <span class="label">성별</span>
           <span class="value">
-            {{ driver.name }}
+            {{ formatGender(driver.gender) }}
+          </span>
+        </div>
+
+        <div class="info-item">
+          <span class="label">나이</span>
+          <span class="value">
+            {{ driver.age }}세
+          </span>
+        </div>
+
+        <div class="info-item">
+          <span class="label">주소</span>
+          <span class="value">
+            {{ driver.address }}
           </span>
         </div>
 
@@ -134,6 +93,81 @@ onMounted(() => {
   </div>
 </template>
 
+<script setup>
+import { ref, onMounted } from "vue";
+import api from "../../api";
+
+const props = defineProps({
+  id: {
+    type: [String, Number],
+    required: true
+  }
+});
+
+const emit = defineEmits(["back"]);
+
+const driver = ref(null);
+
+const fetchDriverDetail = async () => {
+  try {
+    const response = await api.get(`/drivers/${props.id}`);
+    driver.value = response.data;
+  } catch (error) {
+    console.error("기사 상세 정보 조회 실패:", error);
+    alert("기사 정보를 불러오지 못했습니다.");
+  }
+};
+
+const formatGender = (gender) => {
+  switch (gender) {
+    case "MALE":
+      return "남성";
+    case "FEMALE":
+      return "여성";
+    default:
+      return gender || "-";
+  }
+};
+
+const getStatusLabel = (status) => {
+  switch (status) {
+    case "ON_DUTY":
+      return "근무 중";
+    case "STANDBY":
+      return "대기";
+    case "OFF_DUTY":
+      return "휴무";
+    case "RETIRED":
+      return "퇴사";
+    default:
+      return status || "-";
+  }
+};
+
+const getStatusClass = (status) => {
+  switch (status) {
+    case "ON_DUTY":
+      return "status-on";
+    case "STANDBY":
+      return "status-standby";
+    case "OFF_DUTY":
+      return "status-off";
+    case "RETIRED":
+      return "status-danger";
+    default:
+      return "";
+  }
+};
+
+const goToList = () => {
+  emit("back");
+};
+
+onMounted(() => {
+  fetchDriverDetail();
+});
+</script>
+
 <style scoped>
 .driver-details-container {
   padding: var(--spacing-lg, 24px);
@@ -178,6 +212,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 20px;
   padding: 12px 0;
   border-bottom: 1px solid var(--color-border, #334155);
 }
@@ -197,10 +232,8 @@ onMounted(() => {
   font-size: 15px;
   font-weight: 600;
   color: var(--color-text-primary, #ffffff);
-}
-
-.font-mono {
-  color: var(--color-text-secondary, #94a3b8);
+  text-align: right;
+  word-break: break-word;
 }
 
 .status-badge {
@@ -213,6 +246,11 @@ onMounted(() => {
 .status-on {
   background-color: rgba(34, 197, 94, 0.15);
   color: #22c55e;
+}
+
+.status-standby {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
 }
 
 .status-off {

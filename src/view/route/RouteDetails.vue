@@ -206,13 +206,10 @@ const getRouteTypeText = (type) => {
 const getStatusText = (status) => {
   switch (status) {
     case 'ACTIVE':
-      return '운행 중';
+      return '개통';
 
-    case 'SUSPENDED':
-      return '운행 중지';
-
-    case 'DELETED':
-      return '삭제됨';
+    case 'DISCONTINUED':
+      return '폐지';
 
     default:
       return status || '-';
@@ -224,7 +221,7 @@ const getStatusClass = (status) => {
     case 'ACTIVE':
       return 'status-on';
 
-    case 'SUSPENDED':
+    case 'DISCONTINUED':
       return 'status-danger';
 
     default:

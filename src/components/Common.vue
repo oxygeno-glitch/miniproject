@@ -21,6 +21,7 @@ const goToLoginPage = () => {
     <div class="center-content">
       <div class="logo-tooltip-container" @click="goToLoginPage">
         <img src="../assets/main_sec1_img1.png" alt="logo" class="nav-logo" />
+        <p class="tagline">모빌리티 관제, 새로운 이동을 준비합니다</p>
         <div class="tooltip">
           <span class="live-dot"></span>
           대시보드 로그인
@@ -36,7 +37,7 @@ const goToLoginPage = () => {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background-color: #0b131e;
+  background-color: var(--color-background);
 }
 
 /* 배경 비디오 컨테이너 */
@@ -98,13 +99,22 @@ const goToLoginPage = () => {
   filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
 }
 
+.tagline {
+  margin: 4px 0 4px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: #cbd5e1;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
 /* 툴팁 디자인 */
 .tooltip {
   display: flex;
   align-items: center;
   gap: 8px;
   background-color: rgba(21, 31, 46, 0.85);
-  border: 1px solid rgba(59, 130, 246, 0.4);
+  border: 1px solid rgba(0, 163, 196, 0.4);
   padding: 8px 16px;
   border-radius: 20px;
   color: #ffffff;

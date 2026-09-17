@@ -11,13 +11,48 @@
       <form @submit.prevent="submitForm">
         <div class="form-group">
           <label for="name">이름</label>
-          <input 
-            id="name" 
-            v-model.trim="form.name" 
-            type="text" 
-            placeholder="이름을 입력하세요" 
-            autocomplete="off" 
-            required 
+          <input
+            id="name"
+            v-model.trim="form.name"
+            type="text"
+            placeholder="이름을 입력하세요"
+            autocomplete="off"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="gender">성별</label>
+          <select id="gender" v-model="form.gender" required>
+            <option value="" disabled>성별을 선택하세요</option>
+            <option value="MALE">남성</option>
+            <option value="FEMALE">여성</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="age">나이</label>
+          <input
+            id="age"
+            v-model.number="form.age"
+            type="number"
+            min="18"
+            max="100"
+            placeholder="나이를 입력하세요"
+            autocomplete="off"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="address">주소</label>
+          <input
+            id="address"
+            v-model.trim="form.address"
+            type="text"
+            placeholder="주소를 입력하세요"
+            autocomplete="street-address"
+            required
           />
         </div>
 
@@ -34,23 +69,34 @@
         </div>
 
         <!-- 커스텀 드롭다운 영역 -->
-        <div class="form-group" v-click-outside="closeDropdown">
+        <div class="form-group">
           <label>면허 종류</label>
           <div class="custom-select-wrapper" @click="toggleDropdown">
-            <div :class="['custom-select-trigger', { 'is-selected': form.licenseType, 'is-open': isOpen }]">
-              <span>{{ form.licenseType || '면허 종류를 선택하세요' }}</span>
-              <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <div
+              :class="[
+                'custom-select-trigger',
+                { 'is-selected': form.licenseType, 'is-open': isOpen },
+              ]"
+            >
+              <span>{{ form.licenseType || "면허 종류를 선택하세요" }}</span>
+              <svg
+                class="dropdown-arrow"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <polyline points="6 9 12 15 18 9"></polyline>
               </svg>
             </div>
-            
+
             <transition name="dropdown">
               <div v-if="isOpen" class="custom-options">
-                <div 
-                  v-for="type in licenseTypes" 
+                <div
+                  v-for="type in licenseTypes"
                   :key="type"
                   class="custom-option"
-                  :class="{ 'selected': form.licenseType === type }"
+                  :class="{ selected: form.licenseType === type }"
                   @click.stop="selectLicenseType(type)"
                 >
                   {{ type }}
@@ -76,7 +122,7 @@
 
         <div class="button-group">
           <button type="submit" class="btn-primary" :disabled="isSubmitting">
-            {{ isSubmitting ? '등록 중...' : '등록하기' }}
+            {{ isSubmitting ? "등록 중..." : "등록하기" }}
           </button>
           <button type="button" class="btn-secondary" @click="goBack">
             취소
@@ -99,6 +145,9 @@ const licenseTypes = ["1종 보통", "1종 대형", "1종 특수", "2종 보통"
 
 const form = reactive({
   name: "",
+  gender: "",
+  age: null,
+  address: "",
   licenseNumber: "",
   licenseType: "",
   phoneNumber: "",
@@ -108,10 +157,6 @@ const toggleDropdown = () => {
   isOpen.value = !isOpen.value;
 };
 
-const closeDropdown = () => {
-  isOpen.value = false;
-};
-
 const selectLicenseType = (type) => {
   form.licenseType = type;
   isOpen.value = false;
@@ -119,17 +164,17 @@ const selectLicenseType = (type) => {
 
 // 외부 클릭 감지를 위한 커스텀 디렉티브 구현 대신 간단한 이벤트 리스너 처리
 const handleClickOutside = (e) => {
-  if (!e.target.closest('.custom-select-wrapper')) {
+  if (!e.target.closest(".custom-select-wrapper")) {
     isOpen.value = false;
   }
 };
 
 onMounted(() => {
-  window.addEventListener('click', handleClickOutside);
+  window.addEventListener("click", handleClickOutside);
 });
 
 onUnmounted(() => {
-  window.removeEventListener('click', handleClickOutside);
+  window.removeEventListener("click", handleClickOutside);
 });
 
 const formatPhoneNumber = (e) => {
@@ -313,7 +358,9 @@ const goBack = () => {
 /* 드롭다운 애니메이션 */
 .dropdown-enter-active,
 .dropdown-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .dropdown-enter-from,

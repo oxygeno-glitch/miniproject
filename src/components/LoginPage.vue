@@ -50,8 +50,10 @@ const goToSignUp = () => {
           class="auth-logo"
         />
 
+        <span class="brand-kicker">STUDIO G</span>
+
         <h1 class="auth-title">
-          모빌리티 관제 시스템
+          모빌리티 <span class="brand-gradient-text">관제 시스템</span>
         </h1>
 
         <p class="auth-subtitle">
@@ -130,17 +132,18 @@ const goToSignUp = () => {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background-color: #0b131e;
-  color: #ffffff;
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
 }
 
 .base-card {
   width: 100%;
   max-width: 420px;
   padding: 40px;
-  background-color: #151f2e;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
 }
 
 .auth-header {
@@ -154,15 +157,21 @@ const goToSignUp = () => {
   margin-bottom: 16px;
 }
 
+.auth-header .brand-kicker {
+  display: block;
+  margin-bottom: 10px;
+}
+
 .auth-title {
-  font-size: 24px;
-  font-weight: bold;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: var(--tracking-tight);
   margin-bottom: 8px;
 }
 
 .auth-subtitle {
   font-size: 14px;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
 }
 
 .base-form {
@@ -185,34 +194,37 @@ const goToSignUp = () => {
 .base-input {
   width: 100%;
   padding: 12px 16px;
-  background-color: #0b131e;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  color: #ffffff;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
   font-size: 14px;
   box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .base-input:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--color-accent-light);
+  box-shadow: 0 0 0 3px rgba(0, 163, 196, 0.2);
 }
 
 .btn-primary {
   width: 100%;
   padding: 12px;
-  background-color: #2563eb;
+  background: var(--color-primary-gradient);
   color: #ffffff;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-size: 16px;
   font-weight: bold;
   cursor: pointer;
   margin-top: 10px;
+  transition: opacity 0.2s;
 }
 
 .btn-primary:hover {
-  background-color: #1d4ed8;
+  opacity: 0.9;
 }
 
 .auth-prompt {
@@ -222,13 +234,13 @@ const goToSignUp = () => {
   gap: 8px;
   margin-top: 24px;
   font-size: 14px;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
 }
 
 .auth-link-btn {
   background: none;
   border: none;
-  color: #60a5fa;
+  color: var(--color-accent-light);
   cursor: pointer;
   font-size: 14px;
   font-weight: bold;

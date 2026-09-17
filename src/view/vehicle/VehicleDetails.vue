@@ -77,6 +77,14 @@
             해당 차량의 정비 및 점검 이력입니다.
           </p>
         </div>
+
+        <button
+          type="button"
+          class="btn-add-maintenance"
+          @click="openMaintenanceModal"
+        >
+          정비 등록
+        </button>
       </div>
 
       <div
@@ -142,6 +150,102 @@
         목록으로 돌아가기
       </button>
     </div>
+
+    <div
+      v-if="showMaintenanceModal"
+      class="modal-overlay"
+      @click.self="closeMaintenanceModal"
+    >
+      <div class="maintenance-modal">
+        <div class="modal-header">
+          <h3>정비 이력 등록</h3>
+
+          <button
+            type="button"
+            class="close-button"
+            @click="closeMaintenanceModal"
+          >
+            ×
+          </button>
+        </div>
+
+        <form
+          class="maintenance-form"
+          @submit.prevent="submitMaintenance"
+        >
+          <div class="form-group">
+            <label>정비 유형</label>
+
+            <select v-model="maintenanceForm.maintenanceType" required>
+              <option value="">선택하세요</option>
+              <option value="INSPECTION">점검</option>
+              <option value="REPAIR">수리</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>내용</label>
+
+            <textarea
+              v-model="maintenanceForm.description"
+              rows="3"
+              placeholder="정비 내용을 입력하세요"
+            ></textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>비용 (원)</label>
+
+              <input
+                v-model.number="maintenanceForm.cost"
+                type="number"
+                min="0"
+                placeholder="0"
+              />
+            </div>
+
+            <div class="form-group">
+              <label>정비일</label>
+
+              <input
+                v-model="maintenanceForm.maintenanceDate"
+                type="date"
+                required
+              />
+            </div>
+
+            <div class="form-group">
+              <label>다음 정비 예정일</label>
+
+              <input
+                v-model="maintenanceForm.nextDueDate"
+                type="date"
+              />
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="btn-secondary"
+              @click="closeMaintenanceModal"
+              :disabled="isSubmittingMaintenance"
+            >
+              취소
+            </button>
+
+            <button
+              type="submit"
+              class="btn-primary"
+              :disabled="isSubmittingMaintenance"
+            >
+              {{ isSubmittingMaintenance ? '등록 중...' : '등록하기' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 
   <div
@@ -153,7 +257,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import api from '../../api';
 
 const props = defineProps({
@@ -169,6 +273,76 @@ const emit = defineEmits([
 
 const vehicle = ref(null);
 const maintenances = ref([]);
+
+const showMaintenanceModal = ref(false);
+const isSubmittingMaintenance = ref(false);
+
+const maintenanceForm = reactive({
+  maintenanceType: '',
+  description: '',
+  cost: null,
+  maintenanceDate: '',
+  nextDueDate: ''
+});
+
+const resetMaintenanceForm = () => {
+  maintenanceForm.maintenanceType = '';
+  maintenanceForm.description = '';
+  maintenanceForm.cost = null;
+  maintenanceForm.maintenanceDate = '';
+  maintenanceForm.nextDueDate = '';
+};
+
+const openMaintenanceModal = () => {
+  resetMaintenanceForm();
+  showMaintenanceModal.value = true;
+};
+
+const closeMaintenanceModal = () => {
+  if (isSubmittingMaintenance.value) return;
+  showMaintenanceModal.value = false;
+};
+
+const submitMaintenance = async () => {
+  if (isSubmittingMaintenance.value) return;
+
+  if (!maintenanceForm.maintenanceType) {
+    alert('정비 유형을 선택해주세요.');
+    return;
+  }
+
+  if (!maintenanceForm.maintenanceDate) {
+    alert('정비일을 입력해주세요.');
+    return;
+  }
+
+  try {
+    isSubmittingMaintenance.value = true;
+
+    await api.post('/maintenances', {
+      vehicleId: Number(props.id),
+      maintenanceType: maintenanceForm.maintenanceType,
+      description: maintenanceForm.description,
+      cost: maintenanceForm.cost,
+      maintenanceDate: maintenanceForm.maintenanceDate,
+      nextDueDate: maintenanceForm.nextDueDate || null
+    });
+
+    alert('정비 이력이 등록되었습니다.');
+
+    showMaintenanceModal.value = false;
+    await fetchMaintenances();
+  } catch (error) {
+    console.error('정비 이력 등록 실패:', error);
+
+    alert(
+      error.response?.data?.message ||
+      '정비 이력 등록에 실패했습니다.'
+    );
+  } finally {
+    isSubmittingMaintenance.value = false;
+  }
+};
 
 const fetchVehicleDetail = async () => {
   try {
@@ -215,7 +389,7 @@ const getStatusText = (status) => {
       return '운행 중';
 
     case 'INACTIVE':
-      return '대기 중';
+      return '운행 대기 중';
 
     case 'MAINTENANCE':
       return '정비';
@@ -365,7 +539,11 @@ onMounted(async () => {
 }
 
 .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
   margin-bottom: var(--spacing-md);
+  gap: var(--spacing-md);
 }
 
 .section-title {
@@ -378,6 +556,23 @@ onMounted(async () => {
   font-size: 13px;
   color: var(--color-text-secondary);
   margin-top: 4px;
+}
+
+.btn-add-maintenance {
+  background-color: var(--color-surface-light);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-add-maintenance:hover {
+  background-color: var(--color-primary);
+  color: white;
 }
 
 .maintenance-card {
@@ -461,5 +656,132 @@ onMounted(async () => {
   text-align: center;
   padding: var(--spacing-xxl);
   color: var(--color-text-secondary);
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(2, 6, 23, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.maintenance-modal {
+  width: 480px;
+  max-width: calc(100vw - 40px);
+  max-height: 85vh;
+  overflow-y: auto;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--color-text-primary);
+}
+
+.close-button {
+  border: none;
+  background: transparent;
+  font-size: 26px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: color 0.2s;
+}
+
+.close-button:hover {
+  color: var(--color-text-primary);
+}
+
+.maintenance-form {
+  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-light);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: var(--color-primary);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
+.modal-actions .btn-primary {
+  background: var(--color-primary-gradient);
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+}
+
+.modal-actions .btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.modal-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

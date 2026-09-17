@@ -21,7 +21,6 @@
       <table class="vehicle-table">
         <thead>
           <tr>
-            <th>ID</th>
             <th>차량 번호</th>
             <th>모델명</th>
             <th>제조사</th>
@@ -33,13 +32,12 @@
 
         <tbody>
           <tr v-if="vehicles.length === 0">
-            <td colspan="7" class="empty-msg">
+            <td colspan="6" class="empty-msg">
               등록된 차량 데이터가 없습니다.
             </td>
           </tr>
 
-          <tr v-for="vehicle in vehicles" :key="vehicle.id">
-            <td class="font-mono">{{ vehicle.id }}</td>
+          <tr v-for="vehicle in pagedVehicles" :key="vehicle.id">
 
             <td class="highlight-text">
               {{ vehicle.plateNumber }}
@@ -86,12 +84,37 @@
           </tr>
         </tbody>
       </table>
+
+      <div v-if="totalPages > 1" class="pagination">
+        <button
+          type="button"
+          class="page-btn"
+          :disabled="currentPage === 1"
+          @click="currentPage--"
+        >
+          이전
+        </button>
+
+        <span class="page-indicator">
+          {{ currentPage }} / {{ totalPages }} 페이지
+          <span class="page-total">(전체 {{ vehicles.length }}대)</span>
+        </span>
+
+        <button
+          type="button"
+          class="page-btn"
+          :disabled="currentPage === totalPages"
+          @click="currentPage++"
+        >
+          다음
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import api from '../../api';
 
 const emit = defineEmits([
@@ -101,10 +124,46 @@ const emit = defineEmits([
 
 const vehicles = ref([]);
 
+const pageSize = 10;
+const currentPage = ref(1);
+
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(vehicles.value.length / pageSize))
+);
+
+const pagedVehicles = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return vehicles.value.slice(start, start + pageSize);
+});
+
+watch(totalPages, (newTotal) => {
+  if (currentPage.value > newTotal) {
+    currentPage.value = newTotal;
+  }
+});
+
+// 상태 우선순위: 운행 중 > 운행 대기 중 > 정비
+// 목록을 새로 불러올 때(최초 진입 또는 다른 메뉴에서 돌아왔을 때)만 이 순서로
+// 정렬합니다. 상태 배지를 클릭해 바로 바꿔도 그 자리에서 즉시 재정렬되지는
+// 않고, 다음에 목록을 다시 불러올 때 반영됩니다.
+const STATUS_ORDER = {
+  ACTIVE: 0,
+  INACTIVE: 1,
+  MAINTENANCE: 2
+};
+
+const sortByStatus = (list) => {
+  return [...list].sort((a, b) => {
+    const orderA = STATUS_ORDER[a.status] ?? 99;
+    const orderB = STATUS_ORDER[b.status] ?? 99;
+    return orderA - orderB;
+  });
+};
+
 const fetchVehicles = async () => {
   try {
     const response = await api.get('/vehicles');
-    vehicles.value = response.data;
+    vehicles.value = sortByStatus(response.data);
   } catch (error) {
     console.error('차량 목록 조회 실패:', error);
   }
@@ -154,14 +213,17 @@ const toggleStatus = async (vehicle) => {
   }
 
   try {
-    await api.patch(`/vehicles/${vehicle.id}/status`, {
+    const response = await api.patch(`/vehicles/${vehicle.id}/status`, {
       status: nextStatus
     });
 
-    vehicle.status = nextStatus;
+    vehicle.status = response.data.status;
   } catch (error) {
     console.error('차량 상태 변경 실패:', error);
-    alert('차량 상태 변경 중 오류가 발생했습니다.');
+    alert(
+      error.response?.data?.message ||
+      '차량 상태 변경 중 오류가 발생했습니다.'
+    );
   }
 };
 
@@ -182,7 +244,10 @@ const deleteVehicle = async (id) => {
     await fetchVehicles();
   } catch (error) {
     console.error('차량 삭제 실패:', error);
-    alert('차량 삭제 중 오류가 발생했습니다.');
+    alert(
+      error.response?.data?.message ||
+      '차량 삭제 중 오류가 발생했습니다.'
+    );
   }
 };
 
@@ -247,7 +312,7 @@ onMounted(() => {
   vertical-align: middle;
 }
 
-.vehicle-table td:nth-child(7) {
+.vehicle-table td:nth-child(6) {
   width: 150px;
   text-align: center;
 }
@@ -372,5 +437,47 @@ onMounted(() => {
   text-align: center;
   padding: var(--spacing-xxl) !important;
   color: var(--color-text-secondary);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.page-btn {
+  background-color: var(--color-surface-light);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+
+.page-btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-indicator {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.page-total {
+  color: var(--color-text-secondary);
+  opacity: 0.7;
 }
 </style>

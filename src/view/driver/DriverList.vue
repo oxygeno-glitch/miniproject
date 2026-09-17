@@ -17,7 +17,6 @@
       <table class="driver-table">
         <thead>
           <tr>
-            <th>ID</th>
             <th>이름</th>
             <th>면허 번호</th>
             <th>면허 종류</th>
@@ -29,13 +28,12 @@
 
         <tbody>
           <tr v-if="drivers.length === 0">
-            <td colspan="7" class="empty-msg">
+            <td colspan="6" class="empty-msg">
               등록된 기사 데이터가 없습니다.
             </td>
           </tr>
 
-          <tr v-for="driver in drivers" :key="driver.id">
-            <td class="font-mono">{{ driver.id }}</td>
+          <tr v-for="driver in pagedDrivers" :key="driver.id">
             <td class="highlight-text">{{ driver.name }}</td>
             <td>{{ driver.licenseNumber }}</td>
             <td>{{ driver.licenseType }}</td>
@@ -76,17 +74,60 @@
           </tr>
         </tbody>
       </table>
+
+      <div v-if="totalPages > 1" class="pagination">
+        <button
+          type="button"
+          class="page-btn"
+          :disabled="currentPage === 1"
+          @click="currentPage--"
+        >
+          이전
+        </button>
+
+        <span class="page-indicator">
+          {{ currentPage }} / {{ totalPages }} 페이지
+          <span class="page-total">(전체 {{ drivers.length }}명)</span>
+        </span>
+
+        <button
+          type="button"
+          class="page-btn"
+          :disabled="currentPage === totalPages"
+          @click="currentPage++"
+        >
+          다음
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import api from "../../api";
 
 const emit = defineEmits(["go-add", "go-detail"]);
 
 const drivers = ref([]);
+
+const pageSize = 10;
+const currentPage = ref(1);
+
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(drivers.value.length / pageSize))
+);
+
+const pagedDrivers = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return drivers.value.slice(start, start + pageSize);
+});
+
+watch(totalPages, (newTotal) => {
+  if (currentPage.value > newTotal) {
+    currentPage.value = newTotal;
+  }
+});
 
 const fetchDrivers = async () => {
   try {
@@ -152,7 +193,7 @@ const goToDetail = (id) => {
 };
 
 const deleteDriver = async (id) => {
-  if (!confirm(`ID ${id}번 기사를 정말 삭제하시겠습니까?`)) {
+  if (!confirm("이 기사를 정말 삭제하시겠습니까?")) {
     return;
   }
 
@@ -162,7 +203,10 @@ const deleteDriver = async (id) => {
     await fetchDrivers();
   } catch (error) {
     console.error("기사 삭제 실패:", error);
-    alert("기사 삭제 중 오류가 발생했습니다.");
+    alert(
+      error.response?.data?.message ||
+      "기사 삭제 중 오류가 발생했습니다."
+    );
   }
 };
 
@@ -201,11 +245,12 @@ onMounted(() => {
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 .driver-table {
   width: 100%;
+  min-width: 1100px;
   border-collapse: collapse;
   text-align: left;
 }
@@ -217,6 +262,7 @@ onMounted(() => {
   font-weight: 600;
   padding: var(--spacing-md);
   border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
 }
 
 .driver-table td {
@@ -225,6 +271,7 @@ onMounted(() => {
   font-size: 14px;
   color: var(--color-text-primary);
   vertical-align: middle;
+  white-space: nowrap;
 }
 
 .driver-table td:nth-child(6) {
@@ -239,11 +286,6 @@ onMounted(() => {
 .highlight-text {
   font-weight: 600;
   color: var(--color-text-primary);
-}
-
-.font-mono {
-  color: var(--color-text-secondary);
-  font-family: monospace;
 }
 
 .status-badge {
@@ -296,22 +338,6 @@ onMounted(() => {
 .action-buttons {
   display: flex;
   gap: var(--spacing-sm);
-}
-
-.btn-primary-header {
-  background: var(--color-primary-gradient);
-  color: #ffffff;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.btn-primary-header:hover {
-  opacity: 0.9;
 }
 
 .btn-secondary {
@@ -369,5 +395,47 @@ onMounted(() => {
 
 .btn-primary:hover {
   opacity: 0.9;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.page-btn {
+  background-color: var(--color-surface-light);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+
+.page-btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-indicator {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.page-total {
+  color: var(--color-text-secondary);
+  opacity: 0.7;
 }
 </style>

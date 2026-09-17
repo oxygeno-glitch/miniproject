@@ -8,9 +8,20 @@
         </p>
       </div>
 
-      <button type="button" class="btn-refresh" @click="fetchData">
-        새로고침
-      </button>
+      <div class="header-buttons">
+        <button
+          v-if="selectedIds.length > 0"
+          type="button"
+          class="btn-complete-selected"
+          @click="completeSelectedOperations"
+        >
+          선택 완료 ({{ selectedIds.length }})
+        </button>
+
+        <button type="button" class="btn-refresh" @click="fetchData">
+          새로고침
+        </button>
+      </div>
     </div>
 
     <div class="summary-grid">
@@ -20,8 +31,8 @@
       </div>
 
       <div class="summary-card">
-        <span class="summary-label">배차 대기</span>
-        <strong class="summary-value wait">{{ scheduledCount }}</strong>
+        <span class="summary-label">운행 대기중 차량</span>
+        <strong class="summary-value wait">{{ idleVehicleCount }}</strong>
       </div>
 
       <div class="summary-card">
@@ -43,12 +54,21 @@
       <table class="operation-table">
         <thead>
           <tr>
-            <th>ID</th>
+            <th class="checkbox-column">
+              <label class="checkbox-wrap">
+                <input
+                  type="checkbox"
+                  :checked="isAllSelected"
+                  @change="toggleAll"
+                />
+                <span class="checkbox-box"></span>
+              </label>
+            </th>
             <th>노선</th>
             <th>차량</th>
             <th>기사</th>
-            <th>예정 출발</th>
-            <th>예정 도착</th>
+            <th>실제 출발</th>
+            <th>실제 도착</th>
             <th>운행 상태</th>
             <th>관리</th>
           </tr>
@@ -59,8 +79,18 @@
             v-for="dispatch in dispatches"
             :key="dispatch.id"
           >
-            <td class="font-mono">
-              {{ dispatch.id }}
+            <td class="checkbox-column">
+              <label
+                v-if="dispatch.dispatchStatus === 'IN_PROGRESS'"
+                class="checkbox-wrap"
+              >
+                <input
+                  type="checkbox"
+                  :value="dispatch.id"
+                  v-model="selectedIds"
+                />
+                <span class="checkbox-box"></span>
+              </label>
             </td>
 
             <td>
@@ -83,11 +113,11 @@
             </td>
 
             <td class="font-mono">
-              {{ formatDateTime(dispatch.plannedStartTime) }}
+              {{ formatDateTime(dispatch.actualStartTime) }}
             </td>
 
             <td class="font-mono">
-              {{ formatDateTime(dispatch.plannedEndTime) }}
+              {{ formatDateTime(dispatch.actualEndTime) }}
             </td>
 
             <td>
@@ -163,12 +193,40 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import api from '../../api';
 
 const dispatches = ref([]);
+const vehicles = ref([]);
 const vehicleMap = reactive({});
 const driverMap = reactive({});
 
-const scheduledCount = computed(() =>
-  dispatches.value.filter(
-    dispatch => dispatch.dispatchStatus === 'SCHEDULED'
+// 체크박스로 선택한 "운행 중" 배차를 한꺼번에 "운행 종료" 처리하기 위한 상태
+const selectedIds = ref([]);
+
+const isAllSelected = computed(() => {
+  const inProgressDispatches = dispatches.value.filter(
+    dispatch => dispatch.dispatchStatus === 'IN_PROGRESS'
+  );
+
+  if (inProgressDispatches.length === 0) {
+    return false;
+  }
+
+  return inProgressDispatches.every(dispatch =>
+    selectedIds.value.includes(dispatch.id)
+  );
+});
+
+const toggleAll = (event) => {
+  if (event.target.checked) {
+    selectedIds.value = dispatches.value
+      .filter(dispatch => dispatch.dispatchStatus === 'IN_PROGRESS')
+      .map(dispatch => dispatch.id);
+  } else {
+    selectedIds.value = [];
+  }
+};
+
+const idleVehicleCount = computed(() =>
+  vehicles.value.filter(
+    vehicle => vehicle.status === 'INACTIVE'
   ).length
 );
 
@@ -194,6 +252,7 @@ const fetchData = async () => {
       ]);
 
     dispatches.value = dispatchResponse.data;
+    vehicles.value = vehicleResponse.data;
 
     Object.keys(vehicleMap).forEach(key => delete vehicleMap[key]);
     Object.keys(driverMap).forEach(key => delete driverMap[key]);
@@ -205,10 +264,79 @@ const fetchData = async () => {
     driverResponse.data.forEach(driver => {
       driverMap[driver.id] = driver.name || `기사 #${driver.id}`;
     });
+
+    scheduleAutoCompleteForAll(dispatches.value);
   } catch (error) {
     console.error('운행 데이터 조회 실패:', error);
     alert('운행 정보를 불러오지 못했습니다.');
   }
+};
+
+// ---------------------------------------------------------------------------
+// 운행 중 -> 운행 종료 자동 전환
+// "운행 중(IN_PROGRESS)" 상태인 배차는 예상 도착 시간(plannedEndTime) 기준
+// 앞뒤로 3분(±3분) 범위 안의 임의의 시점에 자동으로 "운행 종료"로 상태가
+// 바뀝니다. 이미 그 범위가 지난 경우에는 잠시 후 바로 종료 처리합니다.
+// ---------------------------------------------------------------------------
+
+const AUTO_COMPLETE_WINDOW_MS = 3 * 60 * 1000;
+
+// 이미 자동 종료가 예약된 배차는 다시 예약하지 않도록 추적합니다.
+const scheduledAutoCompleteIds = new Set();
+
+const pickAutoCompleteDelayMs = (dispatch) => {
+  if (!dispatch.plannedEndTime) {
+    // 예상 도착 시간 정보가 없으면 3분 범위 안에서 임의의 시점에 종료합니다.
+    return Math.random() * AUTO_COMPLETE_WINDOW_MS;
+  }
+
+  const target =
+    new Date(dispatch.plannedEndTime).getTime() +
+    (Math.random() * 2 - 1) * AUTO_COMPLETE_WINDOW_MS;
+
+  const delay = target - Date.now();
+
+  // 목표 시각이 이미 지났으면 5~15초 뒤에 바로 종료 처리합니다.
+  return delay > 0 ? delay : 5000 + Math.random() * 10000;
+};
+
+const autoCompleteOperation = async (dispatchId) => {
+  const current = dispatches.value.find(item => item.id === dispatchId);
+
+  // 그 사이 수동으로 종료/취소되었거나 목록에서 사라졌으면 자동 종료하지
+  // 않습니다.
+  if (!current || current.dispatchStatus !== 'IN_PROGRESS') {
+    return;
+  }
+
+  const updatedDispatch = await updateDispatchStatus(current, 'COMPLETED');
+
+  if (!updatedDispatch) {
+    return;
+  }
+
+  await updateDriverStatus(current.driverId, 'OFF_DUTY');
+};
+
+const ensureAutoCompleteScheduled = (dispatch) => {
+  if (
+    !dispatch ||
+    dispatch.dispatchStatus !== 'IN_PROGRESS' ||
+    scheduledAutoCompleteIds.has(dispatch.id)
+  ) {
+    return;
+  }
+
+  scheduledAutoCompleteIds.add(dispatch.id);
+
+  setTimeout(() => {
+    scheduledAutoCompleteIds.delete(dispatch.id);
+    autoCompleteOperation(dispatch.id);
+  }, pickAutoCompleteDelayMs(dispatch));
+};
+
+const scheduleAutoCompleteForAll = (list) => {
+  list.forEach(dispatch => ensureAutoCompleteScheduled(dispatch));
 };
 
 const updateDispatchStatus = async (dispatch, status) => {
@@ -223,6 +351,13 @@ const updateDispatchStatus = async (dispatch, status) => {
     dispatches.value = dispatches.value.map(item =>
       item.id === dispatch.id ? response.data : item
     );
+
+    // 운행 중이 아닌 상태로 바뀐 배차는 체크박스 선택에서도 제외합니다.
+    if (response.data.dispatchStatus !== 'IN_PROGRESS') {
+      selectedIds.value = selectedIds.value.filter(
+        id => id !== dispatch.id
+      );
+    }
 
     return response.data;
   } catch (error) {
@@ -276,6 +411,8 @@ const startOperation = async (dispatch) => {
     return;
   }
 
+  ensureAutoCompleteScheduled(updatedDispatch);
+
   alert('운행이 시작되었습니다.');
 };
 
@@ -301,6 +438,53 @@ const completeOperation = async (dispatch) => {
   }
 
   alert('운행이 종료되었습니다.');
+};
+
+// 체크박스로 선택한 "운행 중" 배차를 한꺼번에 "운행 종료" 처리합니다.
+const completeSelectedOperations = async () => {
+  if (selectedIds.value.length === 0) {
+    alert('완료 처리할 운행을 선택해주세요.');
+    return;
+  }
+
+  const targets = dispatches.value.filter(
+    dispatch =>
+      selectedIds.value.includes(dispatch.id) &&
+      dispatch.dispatchStatus === 'IN_PROGRESS'
+  );
+
+  if (targets.length === 0) {
+    alert('완료 처리할 수 있는 운행이 없습니다.');
+    selectedIds.value = [];
+    return;
+  }
+
+  if (!confirm(`선택한 ${targets.length}건의 운행을 종료하시겠습니까?`)) {
+    return;
+  }
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const dispatch of targets) {
+    const updatedDispatch = await updateDispatchStatus(dispatch, 'COMPLETED');
+
+    if (!updatedDispatch) {
+      failCount += 1;
+      continue;
+    }
+
+    await updateDriverStatus(dispatch.driverId, 'OFF_DUTY');
+    successCount += 1;
+  }
+
+  selectedIds.value = [];
+
+  alert(
+    failCount > 0
+      ? `${successCount}건 종료 완료, ${failCount}건은 실패했습니다.`
+      : `${successCount}건 운행이 종료되었습니다.`
+  );
 };
 
 const cancelDispatch = async (dispatch) => {
@@ -390,6 +574,27 @@ onMounted(() => {
   font-size: 14px;
   color: var(--color-text-secondary);
   margin-top: var(--spacing-xs);
+}
+
+.header-buttons {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.btn-complete-selected {
+  background-color: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+}
+
+.btn-complete-selected:hover {
+  background-color: rgba(59, 130, 246, 0.2);
 }
 
 .btn-refresh {
@@ -547,6 +752,72 @@ onMounted(() => {
 .operation-table td:nth-child(8) {
   width: 180px;
   text-align: center;
+}
+
+.checkbox-column {
+  width: 44px;
+}
+
+/* ---------- 커스텀 체크박스 ---------- */
+
+.checkbox-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.checkbox-wrap input[type="checkbox"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.checkbox-box {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--color-border);
+  border-radius: 5px;
+  background-color: var(--color-surface-light);
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  pointer-events: none;
+}
+
+.checkbox-box::after {
+  content: "";
+  width: 5px;
+  height: 9px;
+  margin-top: -1px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform 0.15s ease;
+}
+
+.checkbox-wrap input[type="checkbox"]:hover ~ .checkbox-box {
+  border-color: var(--color-primary);
+}
+
+.checkbox-wrap input[type="checkbox"]:checked ~ .checkbox-box {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.checkbox-wrap input[type="checkbox"]:checked ~ .checkbox-box::after {
+  transform: rotate(45deg) scale(1);
+}
+
+.checkbox-wrap input[type="checkbox"]:focus-visible ~ .checkbox-box {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.25);
 }
 
 .action-buttons {

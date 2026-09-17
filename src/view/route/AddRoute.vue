@@ -53,13 +53,23 @@
           </p>
         </div>
 
-        <button
-          type="button"
-          class="btn-add-stop"
-          @click="addStop"
-        >
-          정류장 추가
-        </button>
+        <div class="header-buttons">
+          <button
+            type="button"
+            class="btn-add-stop btn-outline"
+            @click="openNewStopModal"
+          >
+            새 정류장 등록
+          </button>
+
+          <button
+            type="button"
+            class="btn-add-stop"
+            @click="addStop"
+          >
+            정류장 추가
+          </button>
+        </div>
       </div>
 
       <div
@@ -139,6 +149,97 @@
         노선 등록
       </button>
     </div>
+
+    <div
+      v-if="showNewStopModal"
+      class="modal-overlay"
+      @click.self="closeNewStopModal"
+    >
+      <div class="stop-modal">
+        <div class="modal-header">
+          <h3>새 정류장 등록</h3>
+
+          <button
+            type="button"
+            class="close-button"
+            @click="closeNewStopModal"
+          >
+            ×
+          </button>
+        </div>
+
+        <form
+          class="new-stop-form"
+          @submit.prevent="submitNewStop"
+        >
+          <div class="form-group">
+            <label>정류장 코드</label>
+
+            <input
+              v-model.trim="newStopForm.stopCode"
+              type="text"
+              placeholder="예: STP-101"
+              maxlength="20"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>정류장명</label>
+
+            <input
+              v-model.trim="newStopForm.stopName"
+              type="text"
+              placeholder="예: 서울역"
+              maxlength="100"
+              required
+            />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>위도</label>
+
+              <input
+                v-model.number="newStopForm.latitude"
+                type="number"
+                step="any"
+                placeholder="예: 37.5547"
+              />
+            </div>
+
+            <div class="form-group">
+              <label>경도</label>
+
+              <input
+                v-model.number="newStopForm.longitude"
+                type="number"
+                step="any"
+                placeholder="예: 126.9707"
+              />
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="btn-secondary"
+              @click="closeNewStopModal"
+              :disabled="isSubmittingStop"
+            >
+              취소
+            </button>
+
+            <button
+              type="submit"
+              class="btn-primary"
+              :disabled="isSubmittingStop"
+            >
+              {{ isSubmittingStop ? '등록 중...' : '등록하기' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -158,6 +259,68 @@ const form = reactive({
   routeType: '',
   stops: []
 });
+
+const showNewStopModal = ref(false);
+const isSubmittingStop = ref(false);
+
+const newStopForm = reactive({
+  stopCode: '',
+  stopName: '',
+  latitude: null,
+  longitude: null
+});
+
+const resetNewStopForm = () => {
+  newStopForm.stopCode = '';
+  newStopForm.stopName = '';
+  newStopForm.latitude = null;
+  newStopForm.longitude = null;
+};
+
+const openNewStopModal = () => {
+  resetNewStopForm();
+  showNewStopModal.value = true;
+};
+
+const closeNewStopModal = () => {
+  if (isSubmittingStop.value) return;
+  showNewStopModal.value = false;
+};
+
+const submitNewStop = async () => {
+  if (isSubmittingStop.value) return;
+
+  if (!newStopForm.stopName.trim()) {
+    alert('정류장명을 입력해주세요.');
+    return;
+  }
+
+  try {
+    isSubmittingStop.value = true;
+
+    const response = await api.post('/stops', {
+      stopCode: newStopForm.stopCode || null,
+      stopName: newStopForm.stopName,
+      latitude: newStopForm.latitude,
+      longitude: newStopForm.longitude
+    });
+
+    stops.value.push(response.data);
+
+    alert('정류장이 등록되었습니다.');
+
+    showNewStopModal.value = false;
+  } catch (error) {
+    console.error('정류장 등록 실패:', error);
+
+    alert(
+      error.response?.data?.message ||
+      '정류장 등록에 실패했습니다.'
+    );
+  } finally {
+    isSubmittingStop.value = false;
+  }
+};
 
 const fetchStops = async () => {
   try {
@@ -335,6 +498,11 @@ onMounted(() => {
   margin-top: 4px;
 }
 
+.header-buttons {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
 .btn-add-stop {
   background-color: var(--color-surface-light);
   color: var(--color-primary);
@@ -350,6 +518,18 @@ onMounted(() => {
 .btn-add-stop:hover {
   background-color: var(--color-primary);
   color: white;
+}
+
+.btn-add-stop.btn-outline {
+  background-color: transparent;
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+}
+
+.btn-add-stop.btn-outline:hover {
+  background-color: var(--color-surface-light);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 .stop-card {
@@ -428,7 +608,7 @@ onMounted(() => {
 }
 
 .btn-primary {
-  background-color: var(--color-primary);
+  background: var(--color-primary-gradient);
   color: white;
   border: none;
   padding: 11px 20px;
@@ -455,5 +635,83 @@ onMounted(() => {
 .btn-secondary:hover {
   border-color: var(--color-primary);
   color: var(--color-primary);
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(2, 6, 23, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.stop-modal {
+  width: 440px;
+  max-width: calc(100vw - 40px);
+  max-height: 85vh;
+  overflow-y: auto;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--color-text-primary);
+}
+
+.close-button {
+  border: none;
+  background: transparent;
+  font-size: 26px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: color 0.2s;
+}
+
+.close-button:hover {
+  color: var(--color-text-primary);
+}
+
+.new-stop-form {
+  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.new-stop-form .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
+.modal-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 500px) {
+  .new-stop-form .form-row {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

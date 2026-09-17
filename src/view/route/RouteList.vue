@@ -22,25 +22,19 @@
       <table class="route-table">
         <thead>
           <tr>
-            <th>ID</th>
             <th>노선 번호</th>
             <th>노선명</th>
             <th>노선 유형</th>
             <th>상태</th>
-            <th>등록일</th>
             <th>관리</th>
           </tr>
         </thead>
 
         <tbody>
           <tr
-            v-for="route in routes"
+            v-for="route in pagedRoutes"
             :key="route.id"
           >
-            <td class="font-mono">
-              {{ route.id }}
-            </td>
-
             <td class="route-number">
               {{ route.routeNumber }}
             </td>
@@ -56,18 +50,20 @@
             </td>
 
             <td>
-              <span
-                :class="[
-                  'status-badge',
-                  getStatusClass(route.status)
-                ]"
+              <button
+                type="button"
+                class="status-button"
+                @click="toggleStatus(route)"
               >
-                {{ getStatusText(route.status) }}
-              </span>
-            </td>
-
-            <td class="font-mono">
-              {{ formatDateTime(route.createdAt) }}
+                <span
+                  :class="[
+                    'status-badge',
+                    getStatusClass(route.status)
+                  ]"
+                >
+                  {{ getStatusText(route.status) }}
+                </span>
+              </button>
             </td>
 
             <td>
@@ -85,7 +81,7 @@
 
           <tr v-if="routes.length === 0">
             <td
-              colspan="7"
+              colspan="5"
               class="empty-msg"
             >
               등록된 노선이 없습니다.
@@ -93,12 +89,37 @@
           </tr>
         </tbody>
       </table>
+
+      <div v-if="totalPages > 1" class="pagination">
+        <button
+          type="button"
+          class="page-btn"
+          :disabled="currentPage === 1"
+          @click="currentPage--"
+        >
+          이전
+        </button>
+
+        <span class="page-indicator">
+          {{ currentPage }} / {{ totalPages }} 페이지
+          <span class="page-total">(전체 {{ routes.length }}개)</span>
+        </span>
+
+        <button
+          type="button"
+          class="page-btn"
+          :disabled="currentPage === totalPages"
+          @click="currentPage++"
+        >
+          다음
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import api from '../../api';
 
 const emit = defineEmits([
@@ -107,6 +128,38 @@ const emit = defineEmits([
 ]);
 
 const routes = ref([]);
+
+const pageSize = 10;
+const currentPage = ref(1);
+
+const sortedRoutes = computed(() => {
+  return [...routes.value].sort((a, b) => {
+    const numberA = parseInt(a.routeNumber, 10);
+    const numberB = parseInt(b.routeNumber, 10);
+
+    if (!Number.isNaN(numberA) && !Number.isNaN(numberB)) {
+      return numberA - numberB;
+    }
+
+    return String(a.routeNumber || '')
+      .localeCompare(String(b.routeNumber || ''));
+  });
+});
+
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(sortedRoutes.value.length / pageSize))
+);
+
+const pagedRoutes = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return sortedRoutes.value.slice(start, start + pageSize);
+});
+
+watch(totalPages, (newTotal) => {
+  if (currentPage.value > newTotal) {
+    currentPage.value = newTotal;
+  }
+});
 
 const fetchRoutes = async () => {
   try {
@@ -139,13 +192,10 @@ const getRouteTypeText = (type) => {
 const getStatusText = (status) => {
   switch (status) {
     case 'ACTIVE':
-      return '운행 중';
+      return '개통';
 
-    case 'SUSPENDED':
-      return '운행 중지';
-
-    case 'DELETED':
-      return '삭제됨';
+    case 'DISCONTINUED':
+      return '폐지';
 
     default:
       return status || '-';
@@ -157,7 +207,7 @@ const getStatusClass = (status) => {
     case 'ACTIVE':
       return 'status-on';
 
-    case 'SUSPENDED':
+    case 'DISCONTINUED':
       return 'status-danger';
 
     default:
@@ -165,14 +215,50 @@ const getStatusClass = (status) => {
   }
 };
 
-const formatDateTime = (dateString) => {
-  if (!dateString) {
-    return '-';
+const toggleStatus = async (route) => {
+  const isActive = route.status === 'ACTIVE';
+  const newStatus = isActive
+    ? 'DISCONTINUED'
+    : 'ACTIVE';
+
+  const newStatusText = isActive
+    ? '폐지'
+    : '개통';
+
+  const confirmed = confirm(
+    `${route.routeNumber} - ${route.routeName}\n\n노선 상태를 "${newStatusText}"으로 변경하시겠습니까?`
+  );
+
+  if (!confirmed) {
+    return;
   }
 
-  return dateString
-    .replace('T', ' ')
-    .substring(0, 16);
+  try {
+    const response = await api.patch(
+      `/routes/${route.id}/status`,
+      {
+        status: newStatus
+      }
+    );
+
+    const index = routes.value.findIndex(
+      item => item.id === route.id
+    );
+
+    if (index !== -1) {
+      routes.value[index] = response.data;
+    }
+
+    alert(`노선 상태가 "${newStatusText}"으로 변경되었습니다.`);
+  } catch (error) {
+    console.error('노선 상태 변경 실패:', error);
+
+    const message =
+      error.response?.data?.message ||
+      '노선 상태 변경에 실패했습니다.';
+
+    alert(message);
+  }
 };
 
 const goToAdd = () => {
@@ -264,6 +350,13 @@ onMounted(() => {
   font-weight: 600;
 }
 
+.status-button {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
 .status-badge {
   display: inline-block;
   min-width: 75px;
@@ -272,6 +365,11 @@ onMounted(() => {
   text-align: center;
   font-size: 12px;
   font-weight: 600;
+  transition: opacity 0.2s;
+}
+
+.status-button:hover .status-badge {
+  opacity: 0.7;
 }
 
 .status-on {
@@ -289,7 +387,7 @@ onMounted(() => {
   color: #ef4444;
 }
 
-.route-table td:nth-child(7) {
+.route-table td:nth-child(5) {
   width: 130px;
   text-align: center;
 }
@@ -300,7 +398,7 @@ onMounted(() => {
 }
 
 .btn-primary {
-  background-color: var(--color-primary);
+  background: var(--color-primary-gradient);
   color: white;
   border: none;
   padding: 10px 18px;
@@ -341,5 +439,47 @@ onMounted(() => {
   text-align: center;
   padding: 40px !important;
   color: var(--color-text-secondary) !important;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.page-btn {
+  background-color: var(--color-surface-light);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+
+.page-btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-indicator {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.page-total {
+  color: var(--color-text-secondary);
+  opacity: 0.7;
 }
 </style>

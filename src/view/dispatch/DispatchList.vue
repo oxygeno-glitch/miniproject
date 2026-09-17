@@ -1,625 +1,781 @@
 <template>
-  <div class="dispatch-list">
+  <div class="dispatch-list-container">
     <div class="header">
-      <h2>배차 관리</h2>
+      <div>
+        <h1 class="page-title">배차 관리</h1>
+        <p class="page-subtitle">
+          노선·차량·기사를 배차하고 운행 상태를 관리합니다.
+        </p>
+      </div>
 
       <div class="header-buttons">
-        <button class="auto-button" @click="openRouteSelect">
-          자동 배차 및 운행 시작
+        <button
+          type="button"
+          class="btn-generate"
+          :disabled="generating"
+          @click="generateDispatchRequests"
+        >
+          {{ generating ? "생성 중..." : "배차" }}
+        </button>
+
+        <button
+          v-if="selectedIds.length > 0"
+          type="button"
+          class="btn-danger"
+          @click="deleteSelectedDispatches"
+        >
+          선택 삭제 ({{ selectedIds.length }})
         </button>
       </div>
+    </div>
+
+    <div v-if="pendingRequests.length > 0" class="pending-section">
+      <div class="pending-header">
+        <div>
+          <h2 class="pending-title">배차 신청 대기 ({{ pendingRequests.length }}건)</h2>
+        </div>
+
+        <button
+          type="button"
+          class="btn-approve-selected"
+          :disabled="selectedRequestIds.length === 0"
+          @click="approveSelectedRequests"
+        >
+          선택 승인 ({{ selectedRequestIds.length }})
+        </button>
+      </div>
+
+      <table class="pending-table">
+        <thead>
+          <tr>
+            <th class="checkbox-column">
+              <label class="checkbox-wrap">
+                <input
+                  type="checkbox"
+                  :checked="isAllRequestsSelected"
+                  @change="toggleAllRequests"
+                />
+                <span class="checkbox-box"></span>
+              </label>
+            </th>
+            <th>노선</th>
+            <th>차량</th>
+            <th>기사</th>
+            <th>예상 운행 시간</th>
+            <th>신청 시각</th>
+            <th class="col-approve">승인</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <tr v-for="request in pendingRequests" :key="request.requestId">
+            <td class="checkbox-column">
+              <label class="checkbox-wrap">
+                <input
+                  type="checkbox"
+                  :value="request.requestId"
+                  v-model="selectedRequestIds"
+                />
+                <span class="checkbox-box"></span>
+              </label>
+            </td>
+
+            <td>
+              <div class="route-info">
+                <span class="route-number">
+                  {{ request.routeNumber || "-" }}
+                </span>
+                <span v-if="request.routeName" class="route-name">
+                  {{ request.routeName }}
+                </span>
+              </div>
+            </td>
+
+            <td>{{ request.vehiclePlateNumber || "-" }}</td>
+
+            <td>{{ request.driverName || "-" }}</td>
+
+            <td class="font-mono">
+              {{ formatDuration(request.plannedStartTime, request.plannedEndTime) }}
+            </td>
+
+            <td class="font-mono">
+              {{ formatDateTime(request.requestedAt) }}
+            </td>
+
+            <td class="col-approve">
+              <button
+                type="button"
+                class="btn-approve"
+                @click="approveRequest(request)"
+              >
+                배차 승인
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <div v-if="loading" class="loading">
       배차 정보를 불러오는 중입니다.
     </div>
 
-    <div v-else-if="dispatches.length === 0" class="empty">
-      등록된 배차 정보가 없습니다.
-    </div>
+    <div v-else class="table-card">
+      <table class="dispatch-table">
+        <thead>
+          <tr>
+            <th class="checkbox-column">
+              <label class="checkbox-wrap">
+                <input
+                  type="checkbox"
+                  :checked="isAllSelected"
+                  @change="toggleAll"
+                />
+                <span class="checkbox-box"></span>
+              </label>
+            </th>
+            <th>노선</th>
+            <th>차량</th>
+            <th>기사</th>
+            <th class="col-duration">예상 운행 시간</th>
+            <th class="col-status">상태</th>
+            <th class="col-actions">관리</th>
+          </tr>
+        </thead>
 
-    <table v-else>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>노선</th>
-          <th>차량</th>
-          <th>기사</th>
-          <th>예정 출발</th>
-          <th>예정 도착</th>
-          <th>실제 출발</th>
-          <th>실제 도착</th>
-          <th>상태</th>
-          <th>관리</th>
-        </tr>
-      </thead>
-
-      <tbody>
-        <tr
-          v-for="dispatch in dispatches"
-          :key="dispatch.id"
-          @click="$emit('detail', dispatch.id)"
-        >
-          <td>{{ dispatch.id }}</td>
-
-          <td>
-            {{ dispatch.routeNumber || '-' }}
-            <span v-if="dispatch.routeName">
-              - {{ dispatch.routeName }}
-            </span>
-          </td>
-
-          <td>{{ dispatch.vehiclePlateNumber || '-' }}</td>
-
-          <td>{{ dispatch.driverName || '-' }}</td>
-
-          <td>{{ formatDateTime(dispatch.plannedStartTime) }}</td>
-
-          <td>{{ formatDateTime(dispatch.plannedEndTime) }}</td>
-
-          <td>{{ formatDateTime(dispatch.actualStartTime) }}</td>
-
-          <td>{{ formatDateTime(dispatch.actualEndTime) }}</td>
-
-          <td>
-            <span
-              class="status"
-              :class="getStatusClass(dispatch.dispatchStatus)"
-            >
-              {{ getStatusText(dispatch.dispatchStatus) }}
-            </span>
-          </td>
-
-          <td @click.stop>
-            <button
-              v-if="dispatch.dispatchStatus === 'SCHEDULED'"
-              class="start-button"
-              @click="updateStatus(dispatch.id, 'IN_PROGRESS')"
-            >
-              운행 시작
-            </button>
-
-            <button
-              v-if="dispatch.dispatchStatus === 'IN_PROGRESS'"
-              class="complete-button"
-              @click="updateStatus(dispatch.id, 'COMPLETED')"
-            >
-              운행 종료
-            </button>
-
-            <button
-              v-if="dispatch.dispatchStatus === 'SCHEDULED'"
-              class="cancel-button"
-              @click="updateStatus(dispatch.id, 'CANCELED')"
-            >
-              취소
-            </button>
-
-            <button
-              v-if="dispatch.dispatchStatus !== 'IN_PROGRESS'"
-              class="delete-button"
-              @click="deleteDispatch(dispatch.id)"
-            >
-              삭제
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-
-    <div
-      v-if="showRouteModal"
-      class="modal-overlay"
-      @click.self="closeRouteSelect"
-    >
-      <div class="route-modal">
-        <div class="modal-header">
-          <h3>자동 배차 노선 선택</h3>
-
-          <button
-            class="close-button"
-            @click="closeRouteSelect"
+        <tbody>
+          <tr
+            v-for="dispatch in dispatches"
+            :key="dispatch.id"
+            @click="dispatch.isFailedRequest ? null : $emit('detail', dispatch.id)"
           >
-            ×
-          </button>
-        </div>
+            <td class="checkbox-column" @click.stop>
+              <label v-if="!dispatch.isFailedRequest" class="checkbox-wrap">
+                <input
+                  type="checkbox"
+                  :value="dispatch.id"
+                  v-model="selectedIds"
+                />
+                <span class="checkbox-box"></span>
+              </label>
+            </td>
 
-        <div v-if="routeLoading" class="modal-loading">
-          노선 정보를 불러오는 중입니다.
-        </div>
+            <td>
+              <div class="route-info">
+                <span class="route-number">
+                  {{ dispatch.routeNumber || "-" }}
+                </span>
+                <span v-if="dispatch.routeName" class="route-name">
+                  {{ dispatch.routeName }}
+                </span>
+              </div>
+            </td>
 
-        <div
-          v-else-if="routes.length === 0"
-          class="modal-empty"
-        >
-          등록된 노선이 없습니다.
-        </div>
+            <td>
+              {{ dispatch.vehiclePlateNumber || "-" }}
+            </td>
 
-        <div v-else class="route-list">
-          <button
-            v-for="route in routes"
-            :key="route.id"
-            class="route-item"
-            @click="selectRoute(route)"
-          >
-            <strong>{{ route.routeNumber }}</strong>
-            <span>{{ route.routeName }}</span>
-          </button>
-        </div>
-      </div>
+            <td>
+              {{ dispatch.driverName || "-" }}
+            </td>
+
+            <td class="col-duration font-mono">
+              {{ formatDuration(dispatch.plannedStartTime, dispatch.plannedEndTime) }}
+            </td>
+
+            <td class="col-status">
+              <span
+                class="status-badge"
+                :class="getStatusClass(dispatch.dispatchStatus)"
+              >
+                {{ getStatusText(dispatch.dispatchStatus) }}
+              </span>
+            </td>
+
+            <td class="col-actions" @click.stop>
+              <div class="action-buttons">
+                <button
+                  v-if="dispatch.dispatchStatus === 'SCHEDULED'"
+                  type="button"
+                  class="btn-cancel"
+                  @click="updateStatus(dispatch.id, 'CANCELED')"
+                >
+                  취소
+                </button>
+
+                <span
+                  v-else-if="dispatch.dispatchStatus === 'IN_PROGRESS'"
+                  class="in-progress-text"
+                >
+                  운행 중
+                </span>
+
+                <span
+                  v-else-if="dispatch.dispatchStatus === 'COMPLETED'"
+                  class="finished-text"
+                >
+                  운행 완료
+                </span>
+
+                <span
+                  v-else-if="dispatch.dispatchStatus === 'CANCELED'"
+                  class="canceled-text"
+                >
+                  취소됨
+                </span>
+
+                <span
+                  v-else-if="dispatch.dispatchStatus === 'FAILED'"
+                  class="failed-text"
+                >
+                  배차 실패
+                </span>
+              </div>
+            </td>
+          </tr>
+
+          <tr v-if="dispatches.length === 0">
+            <td colspan="7" class="empty-msg">
+              등록된 배차 정보가 없습니다.
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import api from '../../api'
+import { onMounted } from "vue";
+import {
+  dispatches,
+  selectedIds,
+  loading,
+  pendingRequests,
+  selectedRequestIds,
+  generating,
+  fetchDispatches,
+  generateDispatchRequests,
+  isAllRequestsSelected,
+  toggleAllRequests,
+  approveRequest,
+  approveSelectedRequests,
+  isAllSelected,
+  toggleAll,
+  updateStatus,
+  deleteSelectedDispatches,
+  formatDuration,
+  formatDateTime,
+  getStatusText,
+  getStatusClass,
+} from "../../store/dispatchQueue";
 
-defineEmits(['detail'])
+defineEmits(["detail"]);
 
-const dispatches = ref([])
-const routes = ref([])
-
-const loading = ref(false)
-const routeLoading = ref(false)
-const showRouteModal = ref(false)
-
-const fetchDispatches = async () => {
-  loading.value = true
-
-  try {
-    const response = await api.get('/dispatches')
-    dispatches.value = response.data
-  } catch (error) {
-    console.error(error)
-    alert('배차 정보를 불러오지 못했습니다.')
-  } finally {
-    loading.value = false
-  }
-}
-
-const fetchRoutes = async () => {
-  routeLoading.value = true
-
-  try {
-    const response = await api.get('/routes')
-    routes.value = response.data
-  } catch (error) {
-    console.error(error)
-    alert('노선 정보를 불러오지 못했습니다.')
-  } finally {
-    routeLoading.value = false
-  }
-}
-
-const openRouteSelect = async () => {
-  showRouteModal.value = true
-
-  if (routes.value.length === 0) {
-    await fetchRoutes()
-  }
-}
-
-const closeRouteSelect = () => {
-  showRouteModal.value = false
-}
-
-const selectRoute = async (route) => {
-  const confirmed = confirm(
-    `${route.routeNumber} - ${route.routeName}\n\n이 노선으로 자동 배차를 시작하시겠습니까?`
-  )
-
-  if (!confirmed) {
-    return
-  }
-
-  try {
-    await api.post('/dispatches/auto-start', {
-      routeId: route.id
-    })
-
-    alert(
-      `${route.routeNumber} - ${route.routeName}\n자동 배차 및 운행이 시작되었습니다.`
-    )
-
-    closeRouteSelect()
-    await fetchDispatches()
-  } catch (error) {
-    console.error(error)
-
-    const message =
-      error.response?.data?.message ||
-      '자동 배차에 실패했습니다.'
-
-    alert(message)
-  }
-}
-
-const updateStatus = async (id, status) => {
-  let message = ''
-
-  if (status === 'IN_PROGRESS') {
-    message = '운행을 시작하시겠습니까?'
-  } else if (status === 'COMPLETED') {
-    message = '운행을 종료하시겠습니까?'
-  } else if (status === 'CANCELED') {
-    message = '배차를 취소하시겠습니까?'
-  }
-
-  if (!confirm(message)) {
-    return
-  }
-
-  try {
-    await api.patch(`/dispatches/${id}/status`, {
-      dispatchStatus: status
-    })
-
-    await fetchDispatches()
-  } catch (error) {
-    console.error(error)
-
-    const message =
-      error.response?.data?.message ||
-      '배차 상태 변경에 실패했습니다.'
-
-    alert(message)
-  }
-}
-
-const deleteDispatch = async (id) => {
-  if (!confirm('이 배차 정보를 삭제하시겠습니까?')) {
-    return
-  }
-
-  try {
-    await api.delete(`/dispatches/${id}`)
-
-    alert('배차 정보가 삭제되었습니다.')
-
-    await fetchDispatches()
-  } catch (error) {
-    console.error(error)
-
-    const message =
-      error.response?.data?.message ||
-      '배차 삭제에 실패했습니다.'
-
-    alert(message)
-  }
-}
-
-const formatDateTime = (value) => {
-  if (!value) {
-    return '-'
-  }
-
-  return value.replace('T', ' ').slice(0, 16)
-}
-
-const getStatusText = (status) => {
-  const statusMap = {
-    SCHEDULED: '배차 대기',
-    IN_PROGRESS: '운행 중',
-    COMPLETED: '운행 완료',
-    CANCELED: '배차 취소'
-  }
-
-  return statusMap[status] || status
-}
-
-const getStatusClass = (status) => {
-  return {
-    scheduled: status === 'SCHEDULED',
-    progress: status === 'IN_PROGRESS',
-    completed: status === 'COMPLETED',
-    canceled: status === 'CANCELED'
-  }
-}
-
+// 배차 목록/배차 신청 대기 상태는 store/dispatchQueue.js(모듈 스코프)에
+// 있어, 다른 메뉴로 이동했다가 돌아와 이 컴포넌트가 다시 마운트되어도
+// "배차 신청 대기" 카드와 진행 중이던 타이머가 그대로 유지됩니다.
 onMounted(() => {
-  fetchDispatches()
-})
+  fetchDispatches();
+});
 </script>
 
 <style scoped>
-.dispatch-list {
+.dispatch-list-container {
+  padding: var(--spacing-lg);
+  max-width: 1500px;
+  margin: 0 auto;
   width: 100%;
-  color: #ffffff;
+  box-sizing: border-box;
 }
 
 .header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+  align-items: flex-end;
+  margin-bottom: var(--spacing-xl);
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
 }
 
-.header h2 {
-  margin: 0;
-  font-size: 24px;
+.page-title {
+  font-size: 28px;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--color-text-primary);
+}
+
+.page-subtitle {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-xs);
 }
 
 .header-buttons {
   display: flex;
-  gap: 10px;
+  gap: var(--spacing-sm);
 }
 
-.header button {
-  border: 1px solid transparent;
-  border-radius: 7px;
-  padding: 10px 16px;
-  cursor: pointer;
+.btn-danger {
+  background-color: transparent;
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  padding: 10px 18px;
   font-size: 14px;
   font-weight: 600;
-  transition: all 0.2s;
-}
-
-.auto-button {
-  background-color: #2563eb;
-  color: #ffffff;
-}
-
-.auto-button:hover {
-  background-color: #3b82f6;
-}
-
-.loading,
-.empty {
-  background-color: #151f2e;
-  border: 1px solid #1e293b;
-  border-radius: 12px;
-  padding: 50px;
-  text-align: center;
-  color: #94a3b8;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  background-color: #151f2e;
-  border: 1px solid #1e293b;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-th,
-td {
-  padding: 13px 12px;
-  border-bottom: 1px solid #1e293b;
-  text-align: center;
-  font-size: 13px;
-}
-
-th {
-  background-color: #111b29;
-  color: #94a3b8;
-  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-md);
   white-space: nowrap;
 }
 
-td {
+.btn-danger:hover {
+  background-color: #ef4444;
   color: #ffffff;
+  border-color: #ef4444;
 }
 
-tbody tr {
+.btn-generate {
+  background: var(--color-primary-gradient);
+  color: #ffffff;
+  border: none;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+  transition: opacity 0.2s;
+}
+
+.btn-generate:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-generate:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.loading {
+  text-align: center;
+  padding: var(--spacing-xxl);
+  color: var(--color-text-secondary);
+}
+
+/* ---------- 배차 신청 대기 ---------- */
+
+.pending-section {
+  background-color: var(--color-surface);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-card);
+  margin-bottom: var(--spacing-xl);
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: auto;
+}
+
+.pending-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.pending-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.btn-approve-selected {
+  background: var(--color-primary-gradient);
+  color: #ffffff;
+  border: none;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+}
+
+.btn-approve-selected:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-approve-selected:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pending-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.pending-table th {
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.pending-table td {
+  padding: 14px 12px;
+  font-size: 14px;
+  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.pending-table tr:last-child td {
+  border-bottom: none;
+}
+
+.col-approve {
+  width: 110px;
+  text-align: center;
+}
+
+.btn-approve {
+  background-color: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  padding: 8px 12px;
+  min-width: 78px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-approve:hover {
+  background-color: rgba(34, 197, 94, 0.2);
+}
+
+.table-card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-card);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dispatch-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.dispatch-table th {
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dispatch-table td {
+  padding: 14px 12px;
+  font-size: 14px;
+  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border);
+  overflow-wrap: break-word;
+}
+
+.dispatch-table tbody tr {
   cursor: pointer;
   transition: background-color 0.2s;
 }
 
-tbody tr:hover {
-  background-color: #1b293b;
+.dispatch-table tbody tr:hover {
+  background-color: var(--color-surface-light);
 }
 
-tbody tr:last-child td {
+.dispatch-table tr:last-child td {
   border-bottom: none;
 }
 
-.status {
-  display: inline-block;
-  min-width: 54px;
-  padding: 5px 9px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
+.checkbox-column {
+  width: 44px;
 }
 
-.status.scheduled {
-  background-color: #78350f;
-  color: #fbbf24;
+.col-duration {
+  width: 130px;
 }
 
-.status.progress {
-  background-color: #1e3a8a;
-  color: #60a5fa;
+.col-status {
+  width: 110px;
 }
 
-.status.completed {
-  background-color: #064e3b;
-  color: #34d399;
+.col-actions {
+  width: 190px;
 }
 
-.status.canceled {
-  background-color: #7f1d1d;
-  color: #fca5a5;
+.font-mono {
+  color: var(--color-text-secondary);
+  font-family: monospace;
 }
 
-.start-button,
-.complete-button,
-.cancel-button,
-.delete-button {
-  border: none;
-  border-radius: 5px;
-  padding: 6px 9px;
-  margin: 2px;
+/* ---------- 커스텀 체크박스 ---------- */
+
+.checkbox-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  transition: all 0.2s;
 }
 
-.start-button {
-  background-color: #2563eb;
-  color: #ffffff;
-}
-
-.start-button:hover {
-  background-color: #3b82f6;
-}
-
-.complete-button {
-  background-color: #059669;
-  color: #ffffff;
-}
-
-.complete-button:hover {
-  background-color: #10b981;
-}
-
-.cancel-button {
-  background-color: #b45309;
-  color: #ffffff;
-}
-
-.cancel-button:hover {
-  background-color: #d97706;
-}
-
-.delete-button {
-  background-color: #dc2626;
-  color: #ffffff;
-}
-
-.delete-button:hover {
-  background-color: #ef4444;
-}
-
-.modal-overlay {
-  position: fixed;
+.checkbox-wrap input[type="checkbox"] {
+  position: absolute;
   inset: 0;
-  background-color: rgba(2, 6, 23, 0.75);
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.checkbox-box {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  border: 1.5px solid var(--color-border);
+  border-radius: 5px;
+  background-color: var(--color-surface-light);
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  pointer-events: none;
 }
 
-.route-modal {
-  width: 500px;
-  max-width: calc(100vw - 40px);
-  max-height: 80vh;
-  overflow: hidden;
-  background-color: #151f2e;
-  border: 1px solid #1e293b;
-  border-radius: 12px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+.checkbox-box::after {
+  content: "";
+  width: 5px;
+  height: 9px;
+  margin-top: -1px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform 0.15s ease;
 }
 
-.modal-header {
+.checkbox-wrap input[type="checkbox"]:hover ~ .checkbox-box {
+  border-color: var(--color-primary);
+}
+
+.checkbox-wrap input[type="checkbox"]:checked ~ .checkbox-box {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.checkbox-wrap input[type="checkbox"]:checked ~ .checkbox-box::after {
+  transform: rotate(45deg) scale(1);
+}
+
+.checkbox-wrap input[type="checkbox"]:focus-visible ~ .checkbox-box {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.25);
+}
+
+.route-info {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 18px 20px;
-  border-bottom: 1px solid #1e293b;
+  flex-direction: column;
+  gap: 3px;
 }
 
-.modal-header h3 {
-  margin: 0;
-  font-size: 18px;
-  color: #ffffff;
-}
-
-.close-button {
-  border: none;
-  background: transparent;
-  font-size: 26px;
-  cursor: pointer;
-  color: #64748b;
-  transition: color 0.2s;
-}
-
-.close-button:hover {
-  color: #ffffff;
-}
-
-.route-list {
-  padding: 12px;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.route-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 15px;
-  margin-bottom: 8px;
-  border: 1px solid #1e293b;
-  border-radius: 8px;
-  background-color: #0b131e;
-  cursor: pointer;
-  text-align: left;
-  color: #ffffff;
-  transition: all 0.2s;
-}
-
-.route-item:last-child {
-  margin-bottom: 0;
-}
-
-.route-item:hover {
-  background-color: #151f2e;
-  border-color: #3b82f6;
-}
-
-.route-item strong {
-  min-width: 60px;
-  font-size: 16px;
+.route-number {
   color: #00a3ff;
+  font-weight: 700;
 }
 
-.route-item span {
-  color: #94a3b8;
-  font-size: 14px;
+.route-name {
+  color: var(--color-text-secondary);
+  font-size: 12px;
 }
 
-.modal-loading,
-.modal-empty {
-  padding: 40px;
+.status-badge {
+  display: inline-block;
+  min-width: 90px;
+  padding: 5px 0;
+  border-radius: 20px;
   text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-wait {
+  background-color: rgba(234, 179, 8, 0.15);
+  color: #eab308;
+}
+
+.status-on {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.status-complete {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+}
+
+.status-danger {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.status-off {
+  background-color: rgba(148, 163, 184, 0.15);
   color: #94a3b8;
 }
 
-@media (max-width: 1100px) {
-  .dispatch-list {
-    overflow-x: auto;
-  }
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
 
-  table {
-    min-width: 1100px;
-  }
+.btn-cancel {
+  padding: 8px 12px;
+  min-width: 64px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-cancel {
+  background-color: transparent;
+  color: #ef4444;
+  border: 1px solid var(--color-border);
+}
+
+.btn-cancel:hover {
+  border-color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.08);
+}
+
+.in-progress-text {
+  color: #22c55e;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.finished-text {
+  color: #3b82f6;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.canceled-text {
+  color: #ef4444;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.failed-text {
+  color: #ef4444;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.empty-msg {
+  text-align: center;
+  padding: 40px !important;
+  color: var(--color-text-secondary) !important;
 }
 
 @media (max-width: 800px) {
   .header {
     align-items: flex-start;
     flex-direction: column;
-    gap: 15px;
   }
 
   .header-buttons {
     width: 100%;
   }
 
-  .header button {
+  .header-buttons button {
     flex: 1;
   }
 
-  .route-modal {
-    width: calc(100vw - 30px);
+  .table-card {
+    padding: var(--spacing-md);
+  }
+
+  .col-duration {
+    width: 100px;
+  }
+
+  .col-status {
+    width: 90px;
+  }
+
+  .col-actions {
+    width: 150px;
+  }
+}
+
+@media (max-width: 600px) {
+  .dispatch-table,
+  .dispatch-table thead,
+  .dispatch-table tbody,
+  .dispatch-table th,
+  .dispatch-table td,
+  .dispatch-table tr {
+    display: block;
+  }
+
+  .dispatch-table thead {
+    display: none;
+  }
+
+  .dispatch-table tr {
+    padding: var(--spacing-md) 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .dispatch-table tr:last-child {
+    border-bottom: none;
+  }
+
+  .dispatch-table td {
+    width: auto;
+    border-bottom: none;
+    padding: 4px 0;
+  }
+
+  .checkbox-column {
+    position: absolute;
+    top: var(--spacing-md);
+    right: 0;
+  }
+
+  .dispatch-table tr {
+    position: relative;
+    padding-right: 36px;
+  }
+
+  .col-status,
+  .col-actions {
+    padding-top: 8px;
+  }
+
+  .action-buttons {
+    justify-content: flex-start;
   }
 }
 </style>

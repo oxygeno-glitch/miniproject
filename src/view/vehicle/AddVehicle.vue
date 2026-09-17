@@ -104,7 +104,10 @@ const submitForm = async () => {
     emit('back');
   } catch (error) {
     console.error('차량 등록 실패:', error);
-    alert('차량 등록 중 오류가 발생했습니다.');
+    alert(
+      error.response?.data?.message ||
+      '차량 등록 중 오류가 발생했습니다.'
+    );
   } finally {
     isSubmitting.value = false;
   }
@@ -187,7 +190,7 @@ const goBack = () => {
 }
 
 .btn-primary {
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary-gradient);
   color: #ffffff;
   border: none;
   padding: 10px 20px;
@@ -195,6 +198,10 @@ const goBack = () => {
   font-weight: 600;
   cursor: pointer;
   border-radius: 6px;
+}
+
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
 }
 
 .btn-primary:disabled {
