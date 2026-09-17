@@ -129,10 +129,30 @@ watch(totalPages, (newTotal) => {
   }
 });
 
+// 상태 우선순위: 근무 중 > 대기 > 휴무 > 퇴사
+// 목록을 새로 불러올 때(최초 진입 또는 다른 메뉴에서 돌아왔을 때)만 이 순서로
+// 정렬합니다. 관리자가 상태 배지를 클릭해 상태를 바꿔도 그 자리에서 즉시
+// 재정렬되지는 않고, 다음에 목록을 다시 불러올 때 반영됩니다. (실시간으로
+// 순서가 바뀌면 방금 클릭한 행이 어디로 이동했는지 찾기 어렵기 때문입니다.)
+const STATUS_ORDER = {
+  ON_DUTY: 0,
+  STANDBY: 1,
+  OFF_DUTY: 2,
+  RETIRED: 3
+};
+
+const sortByStatus = (list) => {
+  return [...list].sort((a, b) => {
+    const orderA = STATUS_ORDER[a.workStatus] ?? 99;
+    const orderB = STATUS_ORDER[b.workStatus] ?? 99;
+    return orderA - orderB;
+  });
+};
+
 const fetchDrivers = async () => {
   try {
     const response = await api.get("/drivers");
-    drivers.value = response.data;
+    drivers.value = sortByStatus(response.data);
   } catch (error) {
     console.error("기사 목록 조회 실패:", error);
   }
