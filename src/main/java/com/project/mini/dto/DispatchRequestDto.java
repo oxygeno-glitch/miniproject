@@ -19,12 +19,6 @@ public class DispatchRequestDto {
 
     @Getter
     @NoArgsConstructor
-    public static class AutoStart {
-        private Long routeId;
-    }
-
-    @Getter
-    @NoArgsConstructor
     public static class UpdateStatus {
         private String dispatchStatus;
 

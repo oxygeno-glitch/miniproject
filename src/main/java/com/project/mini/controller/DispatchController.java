@@ -26,15 +26,6 @@ public class DispatchController {
                 .body(dispatchService.createDispatch(requestDto));
     }
 
-    @PostMapping("/auto-start")
-    public ResponseEntity<DispatchResponseDto> autoStartDispatch(
-            @RequestBody DispatchRequestDto.AutoStart requestDto) {
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(dispatchService.autoStartDispatch(requestDto));
-    }
-
     @GetMapping
     public ResponseEntity<List<DispatchResponseDto>> getAllDispatches() {
         return ResponseEntity.ok(dispatchService.getAllDispatches());
@@ -55,6 +46,15 @@ public class DispatchController {
         return ResponseEntity.ok(
                 dispatchService.updateStatus(id, requestDto)
         );
+    }
+
+    @DeleteMapping
+    public ResponseEntity<Void> deleteDispatches(
+            @RequestBody List<Long> ids) {
+
+        dispatchService.deleteDispatches(ids);
+
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{id}")

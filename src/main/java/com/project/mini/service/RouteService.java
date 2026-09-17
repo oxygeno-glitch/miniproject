@@ -27,9 +27,6 @@ public class RouteService {
     private final StopRepository stopRepository;
     private final RouteStopRepository routeStopRepository;
 
-    /**
-     * 정류장 신규 등록
-     */
     @Transactional
     public StopResponseDto createStop(StopRequestDto.Create requestDto) {
         Stop stop = Stop.builder()
@@ -42,18 +39,12 @@ public class RouteService {
         return new StopResponseDto(stopRepository.save(stop));
     }
 
-    /**
-     * 전체 정류장 목록 조회
-     */
     public List<StopResponseDto> getAllStops() {
         return stopRepository.findAll().stream()
                 .map(StopResponseDto::new)
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 노선 신규 등록 (정류장 매핑 포함)
-     */
     @Transactional
     public RouteResponseDto createRoute(RouteRequestDto.Create requestDto) {
         Route route = Route.builder()
@@ -69,13 +60,22 @@ public class RouteService {
         if (requestDto.getStops() != null && !requestDto.getStops().isEmpty()) {
             for (RouteRequestDto.RouteStopOrderDto stopOrder : requestDto.getStops()) {
                 Stop stop = stopRepository.findById(stopOrder.getStopId())
-                        .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 정류장 ID: " + stopOrder.getStopId()));
+                        .orElseThrow(() ->
+                                new IllegalArgumentException(
+                                        "존재하지 않는 정류장 ID: "
+                                                + stopOrder.getStopId()
+                                )
+                        );
 
                 RouteStop routeStop = RouteStop.builder()
                         .route(savedRoute)
                         .stop(stop)
                         .stopSequence(stopOrder.getStopSequence())
-                        .estimatedMinutes(stopOrder.getEstimatedMinutes() != null ? stopOrder.getEstimatedMinutes() : 0)
+                        .estimatedMinutes(
+                                stopOrder.getEstimatedMinutes() != null
+                                        ? stopOrder.getEstimatedMinutes()
+                                        : 0
+                        )
                         .build();
 
                 savedRouteStops.add(routeStopRepository.save(routeStop));
@@ -85,18 +85,34 @@ public class RouteService {
         return new RouteResponseDto(savedRoute, savedRouteStops);
     }
 
-    /**
-     * 전체 노선 목록 조회
-     */
     public List<RouteResponseDto> getAllRoutes() {
-        return routeRepository.findAll().stream()
+        return routeRepository.findAll()
+                .stream()
                 .map(RouteResponseDto::new)
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 특정 노선 단건 조회
-     */
+    @Transactional
+    public RouteResponseDto updateStatus(Long id, String status) {
+        Route route = routeRepository.findById(id)
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "해당 노선이 존재하지 않습니다. ID: " + id
+                        )
+                );
+
+        if (!"ACTIVE".equals(status)
+                && !"DISCONTINUED".equals(status)) {
+            throw new IllegalArgumentException(
+                    "올바르지 않은 노선 상태입니다."
+            );
+        }
+
+        route.changeStatus(status);
+
+        return new RouteResponseDto(route);
+    }
+
     public RouteResponseDto getRouteById(Long id) {
         Route route = routeRepository.findById(id)
                 .orElseThrow(() ->

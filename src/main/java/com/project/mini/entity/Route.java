@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -27,10 +28,11 @@ public class Route {
     private String routeName;
 
     @Column(name = "route_type", nullable = false, length = 20)
-    private String routeType; // CITY, EXPRESS, SHUTTLE
+    private String routeType;
 
+    @Builder.Default
     @Column(name = "status", length = 20)
-    private String status = "ACTIVE"; // ACTIVE, SUSPENDED, DELETED
+    private String status = "ACTIVE";
 
     @Column(name = "created_at", updatable = false)
     @Builder.Default
@@ -39,4 +41,9 @@ public class Route {
     @Column(name = "updated_at")
     @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
+
+    public void changeStatus(String status) {
+        this.status = status;
+        this.updatedAt = LocalDateTime.now();
+    }
 }

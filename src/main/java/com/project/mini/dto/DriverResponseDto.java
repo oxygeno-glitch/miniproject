@@ -9,6 +9,9 @@ import java.time.LocalDateTime;
 public class DriverResponseDto {
     private Long id;
     private String name;
+    private String gender;
+    private Integer age;
+    private String address;
     private String phoneNumber;
     private String licenseNumber;
     private String licenseType;
@@ -18,6 +21,9 @@ public class DriverResponseDto {
     public DriverResponseDto(Driver driver) {
         this.id = driver.getId();
         this.name = driver.getName();
+        this.gender = driver.getGender();
+        this.age = driver.getAge();
+        this.address = driver.getAddress();
         this.phoneNumber = driver.getPhoneNumber();
         this.licenseNumber = driver.getLicenseNumber();
         this.licenseType = driver.getLicenseType();

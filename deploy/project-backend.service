@@ -1,0 +1,22 @@
+[Unit]
+Description=STUDIO G Backend (Spring Boot)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+# 서버에 맞는 실행 계정으로 바꿔주세요 (root 권장 안 함)
+User=deploy
+WorkingDirectory=/opt/project_backend
+
+# DB_URL / DB_USERNAME / DB_PASSWORD / DDL_AUTO 값이 들어있는 파일
+# (.env.example을 복사해서 실제 값으로 채운 뒤 chmod 600으로 보호하세요)
+EnvironmentFile=/opt/project_backend/.env
+Environment="SPRING_PROFILES_ACTIVE=prod"
+
+ExecStart=/usr/bin/java -jar /opt/project_backend/mini-0.0.1-SNAPSHOT.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

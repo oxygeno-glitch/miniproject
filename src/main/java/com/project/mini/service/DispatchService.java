@@ -40,6 +40,12 @@ public class DispatchService {
                         )
                 );
 
+        if (!"ACTIVE".equals(route.getStatus())) {
+            throw new IllegalArgumentException(
+                    "폐지된 노선은 배차할 수 없습니다."
+            );
+        }
+
         Vehicle vehicle = vehicleRepository.findById(requestDto.getVehicleId())
                 .orElseThrow(() ->
                         new IllegalArgumentException(
@@ -94,58 +100,6 @@ public class DispatchService {
         return new DispatchResponseDto(
                 dispatchRepository.save(dispatch)
         );
-    }
-
-    @Transactional
-    public DispatchResponseDto autoStartDispatch(
-            DispatchRequestDto.AutoStart requestDto) {
-
-        Route route = routeRepository.findById(requestDto.getRouteId())
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "존재하지 않는 노선 ID: "
-                                        + requestDto.getRouteId()
-                        )
-                );
-
-        Driver driver = driverRepository
-                .findFirstByWorkStatusOrderByIdAsc("STANDBY")
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "현재 배차 가능한 대기 기사가 없습니다."
-                        )
-                );
-
-        Vehicle vehicle = vehicleRepository
-                .findFirstByStatusOrderByIdAsc("INACTIVE")
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "현재 배차 가능한 운행 대기 차량이 없습니다."
-                        )
-                );
-
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime plannedEndTime = now.plusHours(1);
-
-        Dispatch dispatch = Dispatch.builder()
-                .route(route)
-                .vehicle(vehicle)
-                .driver(driver)
-                .plannedStartTime(now)
-                .plannedEndTime(plannedEndTime)
-                .dispatchStatus("SCHEDULED")
-                .build();
-
-        Dispatch savedDispatch = dispatchRepository.save(dispatch);
-
-        return updateStatus(
-                savedDispatch.getId(),
-                createInProgressRequest()
-        );
-    }
-
-    private DispatchRequestDto.UpdateStatus createInProgressRequest() {
-        return new DispatchRequestDto.UpdateStatus("IN_PROGRESS");
     }
 
     public List<DispatchResponseDto> getAllDispatches() {
@@ -250,10 +204,12 @@ public class DispatchService {
             actualEndTime = now;
 
             driver.changeWorkStatus("STANDBY");
+            vehicle.updateStatus("INACTIVE");
 
         } else if ("CANCELED".equals(newStatus)) {
 
-            driver.changeWorkStatus("OFF_DUTY");
+            driver.changeWorkStatus("STANDBY");
+            vehicle.updateStatus("INACTIVE");
         }
 
         Dispatch updatedDispatch = Dispatch.builder()
@@ -293,5 +249,36 @@ public class DispatchService {
         }
 
         dispatchRepository.delete(dispatch);
+    }
+
+    @Transactional
+    public void deleteDispatches(List<Long> ids) {
+
+        if (ids == null || ids.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "삭제할 배차를 선택해주세요."
+            );
+        }
+
+        for (Long id : ids) {
+
+            Dispatch dispatch = dispatchRepository.findById(id)
+                    .orElseThrow(() ->
+                            new IllegalArgumentException(
+                                    "해당 배차 정보가 존재하지 않습니다. ID: "
+                                            + id
+                            )
+                    );
+
+            if ("IN_PROGRESS".equals(dispatch.getDispatchStatus())) {
+                throw new IllegalArgumentException(
+                        "운행 중인 배차가 포함되어 있어 삭제할 수 없습니다."
+                );
+            }
+        }
+
+        for (Long id : ids) {
+            dispatchRepository.deleteById(id);
+        }
     }
 }

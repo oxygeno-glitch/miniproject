@@ -23,4 +23,14 @@ public class RouteRequestDto {
         private Integer stopSequence;
         private Integer estimatedMinutes;
     }
+
+    @Getter
+    @NoArgsConstructor
+    public static class UpdateStatus {
+        private String status;
+
+        public UpdateStatus(String status) {
+            this.status = status;
+        }
+    }
 }

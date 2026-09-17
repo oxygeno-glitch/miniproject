@@ -38,6 +38,9 @@ public class DriverService {
 
         Driver driver = Driver.builder()
                 .name(requestDto.getName())
+                .gender(requestDto.getGender())
+                .age(requestDto.getAge())
+                .address(requestDto.getAddress())
                 .phoneNumber(requestDto.getPhoneNumber())
                 .licenseNumber(requestDto.getLicenseNumber())
                 .licenseType(requestDto.getLicenseType())

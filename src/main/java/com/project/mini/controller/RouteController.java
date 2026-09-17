@@ -19,8 +19,6 @@ public class RouteController {
 
     private final RouteService routeService;
 
-    // --- 정류장 API ---
-
     @PostMapping("/stops")
     public ResponseEntity<StopResponseDto> createStop(@RequestBody StopRequestDto.Create requestDto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(routeService.createStop(requestDto));
@@ -30,8 +28,6 @@ public class RouteController {
     public ResponseEntity<List<StopResponseDto>> getAllStops() {
         return ResponseEntity.ok(routeService.getAllStops());
     }
-
-    // --- 노선 API ---
 
     @PostMapping("/routes")
     public ResponseEntity<RouteResponseDto> createRoute(@RequestBody RouteRequestDto.Create requestDto) {
@@ -46,5 +42,15 @@ public class RouteController {
     @GetMapping("/routes/{id}")
     public ResponseEntity<RouteResponseDto> getRouteById(@PathVariable Long id) {
         return ResponseEntity.ok(routeService.getRouteById(id));
+    }
+
+    @PatchMapping("/routes/{id}/status")
+    public ResponseEntity<RouteResponseDto> updateStatus(
+            @PathVariable Long id,
+            @RequestBody RouteRequestDto.UpdateStatus requestDto) {
+
+        return ResponseEntity.ok(
+                routeService.updateStatus(id, requestDto.getStatus())
+        );
     }
 }

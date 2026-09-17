@@ -24,6 +24,15 @@ public class Driver {
     @Column(name = "name", nullable = false, length = 50)
     private String name;
 
+    @Column(name = "gender", nullable = false, length = 10)
+    private String gender;
+
+    @Column(name = "age", nullable = false)
+    private Integer age;
+
+    @Column(name = "address", nullable = false, length = 200)
+    private String address;
+
     @Column(name = "phone_number", nullable = false, unique = true, length = 20)
     private String phoneNumber;
 

@@ -33,6 +33,7 @@ public class Vehicle {
     @Column(name = "model_year")
     private Integer modelYear;
 
+    @Builder.Default
     @Column(name = "status", length = 20)
     private String status = "INACTIVE";
 
